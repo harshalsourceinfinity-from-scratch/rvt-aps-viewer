@@ -2,6 +2,10 @@
 
 A browser-based Revit (`.rvt`) viewer built with Autodesk Platform Services (APS). The application uploads a model once, asks APS to translate it to SVF2, and then loads that saved derivative in the Autodesk Viewer on every later visit.
 
+## Live demo
+
+[Open the RVT viewer](https://rvt-aps-viewer.onrender.com/)
+
 ## What a visitor needs
 
 Visitors only need a modern web browser and the public site URL. They do **not** need Revit, Node.js, an APS account, or the original `.rvt` file.
