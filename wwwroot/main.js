@@ -1,10 +1,21 @@
 import { initViewer, loadModel } from './viewer.js';
 
 initViewer(document.getElementById('preview')).then(viewer => {
-    const urn = window.location.hash?.substring(1);
-    setupModelSelection(viewer, urn);
+    setupDefaultModel(viewer);
     setupModelUpload(viewer);
 });
+
+async function setupDefaultModel(viewer) {
+    // A URL hash deliberately overrides the configured default, so shared model links still work.
+    let urn = window.location.hash?.substring(1);
+    if (!urn) {
+        const resp = await fetch('/api/models/default');
+        if (resp.ok) {
+            urn = (await resp.json()).urn;
+        }
+    }
+    setupModelSelection(viewer, urn);
+}
 
 async function setupModelSelection(viewer, selectedUrn) {
     const dropdown = document.getElementById('models');
@@ -30,6 +41,17 @@ async function setupModelUpload(viewer) {
     const upload = document.getElementById('upload');
     const input = document.getElementById('input');
     const models = document.getElementById('models');
+    try {
+        const resp = await fetch('/api/models/upload-enabled');
+        if (!resp.ok || !(await resp.json()).enabled) {
+            upload.hidden = true;
+            return;
+        }
+    } catch (err) {
+        upload.hidden = true;
+        console.warn('Could not determine upload availability.', err);
+        return;
+    }
     upload.onclick = () => input.click();
     input.onchange = async () => {
         const file = input.files[0];
