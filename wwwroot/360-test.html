@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>360 Video Projection Test</title>
+
+    <style>
+        html,
+        body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: #111;
+        }
+
+        #viewer {
+            width: 100%;
+            height: 100%;
+        }
+
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+
+            display: flex;
+            gap: 10px;
+
+            padding: 12px;
+
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+        }
+
+        button {
+            padding: 8px 14px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 10;
+
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+
+            padding: 10px;
+            border-radius: 5px;
+
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="viewer"></div>
+
+    <div id="controls">
+        <button id="play">▶ Play</button>
+        <button id="pause">⏸ Pause</button>
+    </div>
+
+    <div id="info">
+        360 Video Projection Test
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+    <script>
+
+        const container = document.getElementById('viewer');
+
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(
+            75,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            2000
+        );
+
+        camera.position.set(0, 0, 0);
+
+        const renderer = new THREE.WebGLRenderer({
+            antialias: true
+        });
+
+        renderer.setSize(
+            window.innerWidth,
+            window.innerHeight
+        );
+
+        renderer.setPixelRatio(
+            window.devicePixelRatio
+        );
+
+        container.appendChild(
+            renderer.domElement
+        );
+
+
+        // --------------------------------------------------
+        // VIDEO
+        // --------------------------------------------------
+
+        const video = document.createElement('video');
+
+        video.src =
+            '/videos/christchurch-360-test.mp4';
+
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.crossOrigin = 'anonymous';
+
+        video.addEventListener('loadeddata', () => {
+
+            console.log('Video loaded');
+
+            createSphere();
+
+        });
+
+
+        // --------------------------------------------------
+        // SPHERE
+        // --------------------------------------------------
+
+        function createSphere() {
+
+            const texture =
+                new THREE.VideoTexture(video);
+
+            texture.minFilter =
+                THREE.LinearFilter;
+
+            texture.magFilter =
+                THREE.LinearFilter;
+
+            texture.format =
+                THREE.RGBAFormat;
+
+
+            const geometry =
+                new THREE.SphereGeometry(
+                    500,
+                    64,
+                    64
+                );
+
+
+            const material =
+                new THREE.MeshBasicMaterial({
+
+                    map: texture,
+
+                    side: THREE.BackSide
+
+                });
+
+
+            const sphere =
+                new THREE.Mesh(
+                    geometry,
+                    material
+                );
+
+
+            scene.add(sphere);
+
+
+            video.play().catch(error => {
+
+                console.warn(
+                    'Autoplay blocked',
+                    error
+                );
+
+            });
+
+        }
+
+
+        // --------------------------------------------------
+        // MOUSE LOOK
+        // --------------------------------------------------
+
+        let isDragging = false;
+
+        let previousX = 0;
+        let previousY = 0;
+
+        let yaw = 0;
+        let pitch = 0;
+
+
+        renderer.domElement.addEventListener(
+            'mousedown',
+            event => {
+
+                isDragging = true;
+
+                previousX = event.clientX;
+                previousY = event.clientY;
+
+            }
+        );
+
+
+        window.addEventListener(
+            'mouseup',
+            () => {
+
+                isDragging = false;
+
+            }
+        );
+
+
+        window.addEventListener(
+            'mousemove',
+            event => {
+
+                if (!isDragging) {
+                    return;
+                }
+
+                const deltaX =
+                    event.clientX - previousX;
+
+                const deltaY =
+                    event.clientY - previousY;
+
+
+                yaw -= deltaX * 0.005;
+
+                pitch -= deltaY * 0.005;
+
+
+                const limit =
+                    Math.PI / 2 - 0.05;
+
+                pitch =
+                    Math.max(
+                        -limit,
+                        Math.min(
+                            limit,
+                            pitch
+                        )
+                    );
+
+
+                previousX =
+                    event.clientX;
+
+                previousY =
+                    event.clientY;
+
+            }
+        );
+
+
+        // --------------------------------------------------
+        // ANIMATION
+        // --------------------------------------------------
+
+        function animate() {
+
+            requestAnimationFrame(
+                animate
+            );
+
+
+            camera.rotation.order =
+                'YXZ';
+
+            camera.rotation.y =
+                yaw;
+
+            camera.rotation.x =
+                pitch;
+
+
+            renderer.render(
+                scene,
+                camera
+            );
+
+        }
+
+
+        animate();
+
+
+        // --------------------------------------------------
+        // BUTTONS
+        // --------------------------------------------------
+
+        document
+            .getElementById('play')
+            .addEventListener(
+                'click',
+                () => video.play()
+            );
+
+
+        document
+            .getElementById('pause')
+            .addEventListener(
+                'click',
+                () => video.pause()
+            );
+
+
+        // --------------------------------------------------
+        // RESIZE
+        // --------------------------------------------------
+
+        window.addEventListener(
+            'resize',
+            () => {
+
+                camera.aspect =
+                    window.innerWidth /
+                    window.innerHeight;
+
+                camera.updateProjectionMatrix();
+
+                renderer.setSize(
+                    window.innerWidth,
+                    window.innerHeight
+                );
+
+            }
+        );
+
+    </script>
+
+</body>
+
+</html>

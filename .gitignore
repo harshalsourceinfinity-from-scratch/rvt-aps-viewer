@@ -3,3 +3,9 @@ node_modules
 *.log
 .DS_Store
 Thumbs.db
+
+# Local BIM models
+models/*.rvt
+
+# Local 360/video files
+wwwroot/videos/*.mp4

@@ -1,130 +1,1112 @@
-import { initViewer, loadModel } from './viewer.js';
+import {
+    initViewer,
+    loadModel
+} from './viewer.js';
 
-initViewer(document.getElementById('preview')).then(viewer => {
-    setupDefaultModel(viewer);
-    setupModelUpload(viewer);
-});
 
-async function setupDefaultModel(viewer) {
-    // A URL hash deliberately overrides the configured default, so shared model links still work.
-    let urn = window.location.hash?.substring(1);
-    if (!urn) {
-        const resp = await fetch('/api/models/default');
-        if (resp.ok) {
-            urn = (await resp.json()).urn;
-        }
+import {
+    createVideoEnvironment,
+    setEnvironmentEnabled,
+    changeEnvironmentVideo,
+    playEnvironmentVideo,
+    pauseEnvironmentVideo,
+    toggleEnvironmentMute
+} from './environment.js';
+
+
+// ==================================================
+// ELEMENTS
+// ==================================================
+
+const preview =
+    document.getElementById('preview');
+
+
+const modelDropdown =
+    document.getElementById('models');
+
+
+const uploadButton =
+    document.getElementById('upload');
+
+
+const modelInput =
+    document.getElementById('input');
+
+
+const videoDropdown =
+    document.getElementById('video-select');
+
+
+const videoUploadButton =
+    document.getElementById('video-upload');
+
+
+const videoInput =
+    document.getElementById('video-input');
+
+
+const videoUrlButton =
+    document.getElementById('video-url');
+
+
+const environmentButton =
+    document.getElementById(
+        'environment-toggle'
+    );
+
+
+const playButton =
+    document.getElementById(
+        'video-play'
+    );
+
+
+const pauseButton =
+    document.getElementById(
+        'video-pause'
+    );
+
+
+const muteButton =
+    document.getElementById(
+        'video-mute'
+    );
+
+
+// ==================================================
+// LOCAL MODELS
+// ==================================================
+
+const LOCAL_MODEL_OPTIONS = [
+
+    {
+        name: 'dach-sample-project.rvt',
+
+        filename:
+            'dach-sample-project.rvt'
+    },
+    {
+        name: 'ARSITEKTUR-RUMAH-SEDERHANA.0005.rvt',
+
+        filename:
+            'ARSITEKTUR-RUMAH-SEDERHANA.0005.rvt'
+    },
+    {
+        name: 'LR28159_2025-MALTI-STORY-HOME.rvt',
+
+        filename:
+            'LR28159_2025-MALTI-STORY-HOME.rvt'
     }
-    setupModelSelection(viewer, urn);
-}
 
-async function setupModelSelection(viewer, selectedUrn) {
-    const dropdown = document.getElementById('models');
-    dropdown.innerHTML = '';
-    try {
-        const resp = await fetch('/api/models');
-        if (!resp.ok) {
-            throw new Error(await resp.text());
-        }
-        const models = await resp.json();
-        dropdown.innerHTML = models.map(model => `<option value=${model.urn} ${model.urn === selectedUrn ? 'selected' : ''}>${model.name}</option>`).join('\n');
-        dropdown.onchange = () => onModelSelected(viewer, dropdown.value);
-        if (dropdown.value) {
-            onModelSelected(viewer, dropdown.value);
-        }
-    } catch (err) {
-        alert('Could not list models. See the console for more details.');
-        console.error(err);
+];
+
+
+// ==================================================
+// 360 VIDEOS
+// ==================================================
+
+const VIDEO_OPTIONS = [
+
+    {
+        name:
+            'Christchurch 360°',
+
+        source:
+            '/videos/christchurch-360-test.mp4'
+    },
+
+    {
+        name:
+            'Previous Test',
+
+        source:
+            '/videos/16092439_3840_2160_30fps.mp4'
     }
-}
 
-async function setupModelUpload(viewer) {
-    const upload = document.getElementById('upload');
-    const input = document.getElementById('input');
-    const models = document.getElementById('models');
-    try {
-        const resp = await fetch('/api/models/upload-enabled');
-        if (!resp.ok || !(await resp.json()).enabled) {
-            upload.hidden = true;
-            return;
-        }
-    } catch (err) {
-        upload.hidden = true;
-        console.warn('Could not determine upload availability.', err);
+];
+
+
+// ==================================================
+// STATE
+// ==================================================
+
+let environmentEnabled =
+    true;
+
+
+let videoMuted =
+    true;
+
+
+// ==================================================
+// START APPLICATION
+// ==================================================
+
+initViewer(
+    preview
+)
+.then(
+    async viewer => {
+
+
+        console.log(
+            'APS Viewer initialized.'
+        );
+
+
+        // ==================================================
+        // START 360 ENVIRONMENT FIRST
+        // ==================================================
+
+        setupVideoOptions();
+
+
+        createVideoEnvironment(
+            preview,
+            viewer
+        );
+
+
+        setupEnvironmentControls();
+
+
+        setupVideoControls();
+
+
+        // ==================================================
+        // LOAD LOCAL MODELS
+        // ==================================================
+
+        await setupLocalModels(
+            viewer
+        );
+
+
+        // ==================================================
+        // MANUAL APS UPLOAD
+        // ==================================================
+
+        setupModelUpload(
+            viewer
+        );
+
+
+    }
+)
+.catch(
+    error => {
+
+        console.error(
+            'Application initialization failed:',
+            error
+        );
+
+    }
+);
+
+
+// ==================================================
+// LOCAL MODEL DROPDOWN
+// ==================================================
+
+async function setupLocalModels(
+    viewer
+) {
+
+    if (
+        !modelDropdown
+    ) {
+
+        console.error(
+            '#models was not found.'
+        );
+
         return;
-    }
-    upload.onclick = () => input.click();
-    input.onchange = async () => {
-        const file = input.files[0];
-        let data = new FormData();
-        data.append('model-file', file);
-        if (file.name.endsWith('.zip')) { // When uploading a zip file, ask for the main design file in the archive
-            const entrypoint = window.prompt('Please enter the filename of the main design inside the archive.');
-            data.append('model-zip-entrypoint', entrypoint);
-        }
-        upload.setAttribute('disabled', 'true');
-        models.setAttribute('disabled', 'true');
-        showNotification(`Uploading model <em>${file.name}</em>. Do not reload the page.`);
-        try {
-            const resp = await fetch('/api/models', { method: 'POST', body: data });
-            if (!resp.ok) {
-                throw new Error(await resp.text());
-            }
-            const model = await resp.json();
-            setupModelSelection(viewer, model.urn);
-        } catch (err) {
-            alert(`Could not upload model ${file.name}. See the console for more details.`);
-            console.error(err);
-        } finally {
-            clearNotification();
-            upload.removeAttribute('disabled');
-            models.removeAttribute('disabled');
-            input.value = '';
-        }
-    };
-}
 
-async function onModelSelected(viewer, urn) {
-    if (window.onModelSelectedTimeout) {
-        clearTimeout(window.onModelSelectedTimeout);
-        delete window.onModelSelectedTimeout;
     }
-    window.location.hash = urn;
+
+
     try {
-        const resp = await fetch(`/api/models/${urn}/status`);
-        if (!resp.ok) {
-            throw new Error(await resp.text());
+
+        const response =
+            await fetch(
+                '/api/local-models'
+            );
+
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                await response.text()
+            );
+
         }
-        const status = await resp.json();
-        switch (status.status) {
-            case 'n/a':
-                showNotification(`Model has not been translated.`);
-                break;
-            case 'inprogress':
-                showNotification(`Model is being translated (${status.progress})...`);
-                window.onModelSelectedTimeout = setTimeout(onModelSelected, 5000, viewer, urn);
-                break;
-            case 'failed':
-                showNotification(`Translation failed. <ul>${status.messages.map(msg => `<li>${JSON.stringify(msg)}</li>`).join('')}</ul>`);
-                break;
-            default:
-                clearNotification();
-                loadModel(viewer, urn);
-                break; 
+
+
+        const models =
+            await response.json();
+
+
+        modelDropdown.innerHTML =
+            '';
+
+
+        // --------------------------------------------------
+        // Add local models
+        // --------------------------------------------------
+
+        models.forEach(
+            model => {
+
+                const option =
+                    document.createElement(
+                        'option'
+                    );
+
+
+                option.value =
+                    model.filename;
+
+
+                option.textContent =
+                    model.name;
+
+
+                modelDropdown.appendChild(
+                    option
+                );
+
+            }
+        );
+
+
+        // --------------------------------------------------
+        // Change model
+        // --------------------------------------------------
+
+        modelDropdown.addEventListener(
+            'change',
+            async () => {
+
+                await loadLocalModel(
+                    viewer,
+                    modelDropdown.value
+                );
+
+            }
+        );
+
+
+        // --------------------------------------------------
+        // Automatically load first model
+        // --------------------------------------------------
+
+        if (
+            models.length > 0
+        ) {
+
+            await loadLocalModel(
+                viewer,
+                models[0].filename
+            );
+
         }
-    } catch (err) {
-        alert('Could not load model. See the console for more details.');
-        console.error(err);
+
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            'Could not load local model list:',
+            error
+        );
+
+
+        showNotification(
+            'Could not read the local models folder.'
+        );
+
     }
+
 }
 
-function showNotification(message) {
-    const overlay = document.getElementById('overlay');
-    overlay.innerHTML = `<div class="notification">${message}</div>`;
-    overlay.style.display = 'flex';
+
+// ==================================================
+// LOAD LOCAL MODEL
+// ==================================================
+
+async function loadLocalModel(
+    viewer,
+    filename
+) {
+
+    if (
+        !filename
+    ) {
+
+        return;
+
+    }
+
+
+    try {
+
+        showNotification(
+            `Preparing <strong>${filename}</strong>...`
+        );
+
+
+        // --------------------------------------------------
+        // Ask server to upload/find APS model
+        // --------------------------------------------------
+
+        const response =
+            await fetch(
+                '/api/local-models/load',
+                {
+
+                    method:
+                        'POST',
+
+                    headers: {
+
+                        'Content-Type':
+                            'application/json'
+
+                    },
+
+                    body:
+                        JSON.stringify({
+
+                            filename
+
+                        })
+
+                }
+            );
+
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                await response.text()
+            );
+
+        }
+
+
+        const result =
+            await response.json();
+
+
+        console.log(
+            'Local model result:',
+            result
+        );
+
+
+        // --------------------------------------------------
+        // Wait for translation
+        // --------------------------------------------------
+
+        await waitForModelTranslation(
+            result.urn
+        );
+
+
+        // --------------------------------------------------
+        // Load model
+        // --------------------------------------------------
+
+        clearNotification();
+
+
+        await loadModel(
+            viewer,
+            result.urn
+        );
+
+
+        console.log(
+            `Loaded: ${filename}`
+        );
+
+
+    } catch (
+        error
+    ) {
+
+        console.error(
+            `Could not load ${filename}:`,
+            error
+        );
+
+
+        showNotification(
+            `Could not load <strong>${filename}</strong>.<br>Check the browser console.`
+        );
+
+    }
+
 }
+
+
+// ==================================================
+// WAIT FOR APS TRANSLATION
+// ==================================================
+
+async function waitForModelTranslation(
+    urn
+) {
+
+    while (true) {
+
+
+        const response =
+            await fetch(
+                `/api/models/${urn}/status`
+            );
+
+
+        if (
+            !response.ok
+        ) {
+
+            throw new Error(
+                await response.text()
+            );
+
+        }
+
+
+        const status =
+            await response.json();
+
+
+        console.log(
+            'Translation status:',
+            status
+        );
+
+
+        // --------------------------------------------------
+        // READY
+        // --------------------------------------------------
+
+        if (
+            status.status ===
+            'success'
+        ) {
+
+            return;
+
+        }
+
+
+        // --------------------------------------------------
+        // FAILED
+        // --------------------------------------------------
+
+        if (
+            status.status ===
+            'failed'
+        ) {
+
+            throw new Error(
+                JSON.stringify(
+                    status.messages
+                )
+            );
+
+        }
+
+
+        // --------------------------------------------------
+        // IN PROGRESS
+        // --------------------------------------------------
+
+        if (
+            status.status ===
+            'inprogress'
+        ) {
+
+            showNotification(
+                `Translating BIM model... <strong>${status.progress || ''}</strong>`
+            );
+
+
+            await sleep(
+                5000
+            );
+
+
+            continue;
+
+        }
+
+
+        // --------------------------------------------------
+        // NOT AVAILABLE YET
+        // --------------------------------------------------
+
+        await sleep(
+            3000
+        );
+
+    }
+
+}
+
+
+// ==================================================
+// MANUAL MODEL UPLOAD
+// ==================================================
+
+function setupModelUpload(
+    viewer
+) {
+
+    if (
+        !uploadButton ||
+        !modelInput
+    ) {
+
+        return;
+
+    }
+
+
+    uploadButton.addEventListener(
+        'click',
+        () => {
+
+            modelInput.click();
+
+        }
+    );
+
+
+    modelInput.addEventListener(
+        'change',
+        async () => {
+
+            const file =
+                modelInput.files[0];
+
+
+            if (
+                !file
+            ) {
+
+                return;
+
+            }
+
+
+            const formData =
+                new FormData();
+
+
+            formData.append(
+                'model-file',
+                file
+            );
+
+
+            if (
+                file.name
+                    .toLowerCase()
+                    .endsWith('.zip')
+            ) {
+
+                const entrypoint =
+                    window.prompt(
+                        'Enter the main design filename inside the ZIP:'
+                    );
+
+
+                formData.append(
+                    'model-zip-entrypoint',
+                    entrypoint || ''
+                );
+
+            }
+
+
+            uploadButton.disabled =
+                true;
+
+
+            try {
+
+                showNotification(
+                    `Uploading <strong>${file.name}</strong>...`
+                );
+
+
+                const response =
+                    await fetch(
+                        '/api/models',
+                        {
+
+                            method:
+                                'POST',
+
+                            body:
+                                formData
+
+                        }
+                    );
+
+
+                if (
+                    !response.ok
+                ) {
+
+                    throw new Error(
+                        await response.text()
+                    );
+
+                }
+
+
+                const result =
+                    await response.json();
+
+
+                await waitForModelTranslation(
+                    result.urn
+                );
+
+
+                clearNotification();
+
+
+                await loadModel(
+                    viewer,
+                    result.urn
+                );
+
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    'Manual model upload failed:',
+                    error
+                );
+
+
+                showNotification(
+                    `Upload failed.<br>${error.message}`
+                );
+
+            } finally {
+
+                uploadButton.disabled =
+                    false;
+
+
+                modelInput.value =
+                    '';
+
+            }
+
+        }
+    );
+
+}
+
+
+// ==================================================
+// VIDEO OPTIONS
+// ==================================================
+
+function setupVideoOptions() {
+
+    if (
+        !videoDropdown
+    ) {
+
+        return;
+
+    }
+
+
+    videoDropdown.innerHTML =
+        '';
+
+
+    VIDEO_OPTIONS.forEach(
+        (video, index) => {
+
+            const option =
+                document.createElement(
+                    'option'
+                );
+
+
+            option.value =
+                video.source;
+
+
+            option.textContent =
+                video.name;
+
+
+            option.selected =
+                index === 0;
+
+
+            videoDropdown.appendChild(
+                option
+            );
+
+        }
+    );
+
+
+    videoDropdown.addEventListener(
+        'change',
+        () => {
+
+            changeEnvironmentVideo(
+                videoDropdown.value
+            );
+
+        }
+    );
+
+}
+
+
+// ==================================================
+// ENVIRONMENT ON / OFF
+// ==================================================
+
+function setupEnvironmentControls() {
+
+    if (
+        !environmentButton
+    ) {
+
+        return;
+
+    }
+
+
+    environmentButton.textContent =
+        'Environment: ON';
+
+
+    environmentButton.addEventListener(
+        'click',
+        () => {
+
+            environmentEnabled =
+                !environmentEnabled;
+
+
+            setEnvironmentEnabled(
+                environmentEnabled
+            );
+
+
+            environmentButton.textContent =
+                environmentEnabled
+
+                    ? 'Environment: ON'
+
+                    : 'Environment: OFF';
+
+        }
+    );
+
+}
+
+
+// ==================================================
+// VIDEO CONTROLS
+// ==================================================
+
+function setupVideoControls() {
+
+
+    if (
+        playButton
+    ) {
+
+        playButton.addEventListener(
+            'click',
+            () => {
+
+                playEnvironmentVideo();
+
+            }
+        );
+
+    }
+
+
+    if (
+        pauseButton
+    ) {
+
+        pauseButton.addEventListener(
+            'click',
+            () => {
+
+                pauseEnvironmentVideo();
+
+            }
+        );
+
+    }
+
+
+    if (
+        muteButton
+    ) {
+
+        muteButton.addEventListener(
+            'click',
+            () => {
+
+                videoMuted =
+                    toggleEnvironmentMute();
+
+
+                muteButton.textContent =
+                    videoMuted
+
+                        ? '🔇 Muted'
+
+                        : '🔊 Sound';
+
+            }
+        );
+
+    }
+
+
+    // ==================================================
+    // UPLOAD VIDEO
+    // ==================================================
+
+    if (
+        videoUploadButton &&
+        videoInput
+    ) {
+
+        videoUploadButton.addEventListener(
+            'click',
+            () => {
+
+                videoInput.click();
+
+            }
+        );
+
+
+        videoInput.addEventListener(
+            'change',
+            () => {
+
+                const file =
+                    videoInput.files[0];
+
+
+                if (
+                    !file
+                ) {
+
+                    return;
+
+                }
+
+
+                const objectUrl =
+                    URL.createObjectURL(
+                        file
+                    );
+
+
+                const option =
+                    document.createElement(
+                        'option'
+                    );
+
+
+                option.value =
+                    objectUrl;
+
+
+                option.textContent =
+                    `Local: ${file.name}`;
+
+
+                option.selected =
+                    true;
+
+
+                videoDropdown.appendChild(
+                    option
+                );
+
+
+                changeEnvironmentVideo(
+                    objectUrl
+                );
+
+
+                videoInput.value =
+                    '';
+
+            }
+        );
+
+    }
+
+
+    // ==================================================
+    // VIDEO URL
+    // ==================================================
+
+    if (
+        videoUrlButton
+    ) {
+
+        videoUrlButton.addEventListener(
+            'click',
+            () => {
+
+                const url =
+                    window.prompt(
+                        'Enter a direct MP4/WebM video URL:'
+                    );
+
+
+                if (
+                    !url
+                ) {
+
+                    return;
+
+                }
+
+
+                const option =
+                    document.createElement(
+                        'option'
+                    );
+
+
+                option.value =
+                    url;
+
+
+                option.textContent =
+                    `URL: ${url}`;
+
+
+                option.selected =
+                    true;
+
+
+                videoDropdown.appendChild(
+                    option
+                );
+
+
+                changeEnvironmentVideo(
+                    url
+                );
+
+            }
+        );
+
+    }
+
+}
+
+
+// ==================================================
+// HELPERS
+// ==================================================
+
+function sleep(
+    milliseconds
+) {
+
+    return new Promise(
+        resolve =>
+            setTimeout(
+                resolve,
+                milliseconds
+            )
+    );
+
+}
+
+
+function showNotification(
+    message
+) {
+
+    const overlay =
+        document.getElementById(
+            'overlay'
+        );
+
+
+    if (
+        !overlay
+    ) {
+
+        return;
+
+    }
+
+
+    overlay.innerHTML =
+        `<div class="notification">${message}</div>`;
+
+
+    overlay.style.display =
+        'flex';
+
+}
+
 
 function clearNotification() {
-    const overlay = document.getElementById('overlay');
-    overlay.innerHTML = '';
-    overlay.style.display = 'none';
+
+    const overlay =
+        document.getElementById(
+            'overlay'
+        );
+
+
+    if (
+        !overlay
+    ) {
+
+        return;
+
+    }
+
+
+    overlay.innerHTML =
+        '';
+
+
+    overlay.style.display =
+        'none';
+
 }
