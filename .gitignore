@@ -7,6 +7,10 @@ Thumbs.db
 # Local BIM models
 models/*.rvt
 
+# Allow deployment RVT files
+!models/ARSITEKTUR-RUMAH-SEDERHANA.0005.rvt
+!models/LR28159_2025-MALTI-STORY-HOME.rvt
+
 # Local 360/video files
 wwwroot/videos/**/*.mp4
 wwwroot/videos/**/*.webm
