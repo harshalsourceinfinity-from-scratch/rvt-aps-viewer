@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: rvt-aps-viewer
+    runtime: node
+    buildCommand: npm ci
+    startCommand: npm start
+    envVars:
+      - key: APS_CLIENT_ID
+        sync: false
+      - key: APS_CLIENT_SECRET
+        sync: false
+      - key: APS_BUCKET
+        sync: false
+      - key: APS_DEFAULT_MODEL_URN
+        sync: false
+      - key: APS_ENABLE_UPLOADS
+        value: false
+      - key: APS_ENABLE_MODEL_SELECTION
+        value: false

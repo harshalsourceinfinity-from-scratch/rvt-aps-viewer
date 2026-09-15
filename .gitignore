@@ -1,0 +1,15 @@
+node_modules
+.env
+*.log
+.DS_Store
+Thumbs.db
+
+# Local BIM models
+models/*.rvt
+
+# Local 360/video files
+wwwroot/videos/**/*.mp4
+wwwroot/videos/**/*.webm
+
+# Large point-cloud data
+wwwroot/PotreeExtension/data/
