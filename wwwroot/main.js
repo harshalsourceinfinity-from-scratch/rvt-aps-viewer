@@ -143,7 +143,7 @@ const VIDEO_OPTIONS = [
 // ==================================================
 
 let environmentEnabled =
-    true;
+    false;
 
 
 let videoMuted =
@@ -178,7 +178,7 @@ initViewer(
             viewer
         );
 
-
+        setEnvironmentEnabled(false);
         setupEnvironmentControls();
 
 
@@ -883,7 +883,7 @@ function setupEnvironmentControls() {
 
 
     environmentButton.textContent =
-        'Environment: ON';
+        'Environment: OFF';
 
 
     environmentButton.addEventListener(
