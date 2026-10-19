@@ -4,7 +4,7 @@ A browser-based Revit (`.rvt`) viewer built with Autodesk Platform Services (APS
 
 ## Live demo
 
-[Open the RVT viewer](https://rvt-aps-viewer.onrender.com/)
+[Open the RVT viewer](https://rvt-aps-viewer-3q7l.onrender.com/)
 
 ## What a visitor needs
 
